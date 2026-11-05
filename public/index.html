@@ -1863,23 +1863,7 @@
       <button class="btn o" id="clr">Себетті тазалау</button>
     </div>
   </div>
- <script>
-    const videoElement = document.getElementById('webcam');
 
-    // Ноутбуктің веб-камерасын браузер арқылы тікелей қосу
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-            .then(function (stream) {
-                videoElement.srcObject = stream;
-            })
-            .catch(function (error) {
-                console.error("Камераны қосу мүмкін болмады немесе рұқсат берілмеді:", error);
-                alert("Веб-камераға қол жеткізуге рұқсат беріңіз!");
-            });
-    } else {
-        alert("Сіздің браузериңіз веб-камераны қолдамайды.");
-    }
-</script>
   <script src="/client.js"></script>
 </body>
 
