@@ -1758,7 +1758,9 @@
       <div class="cab" id="cabg">
         <div class="cc" id="camc" hidden>
           <h3>🔴 <span id="camt">Тікелей эфир</span></h3>
-          <div class="vid" id="vid"></div>
+          <div class="vid">
+    <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain;"></video>
+</div>
           <p class="note">Тек тіркелген клиенттерге көрінеді.</p>
         </div>
         <div class="co">
@@ -1861,6 +1863,23 @@
       <button class="btn o" id="clr">Себетті тазалау</button>
     </div>
   </div>
+ <script>
+    const videoElement = document.getElementById('webcam');
+
+    // Ноутбуктің веб-камерасын браузер арқылы тікелей қосу
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(function (stream) {
+                videoElement.srcObject = stream;
+            })
+            .catch(function (error) {
+                console.error("Камераны қосу мүмкін болмады немесе рұқсат берілмеді:", error);
+                alert("Веб-камераға қол жеткізуге рұқсат беріңіз!");
+            });
+    } else {
+        alert("Сіздің браузериңіз веб-камераны қолдамайды.");
+    }
+</script>
   <script src="/client.js"></script>
 </body>
 
