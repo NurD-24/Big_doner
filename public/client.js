@@ -211,3 +211,20 @@ function playCam(c,v){var u=c.url,k=c.kind||'auto';
     if(window.Hls)go();else{var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';s.onload=go;s.onerror=err;document.head.appendChild(s)}}
   else{vd.src=u;vd.onerror=err}}
 setInterval(function(){if(me&&document.visibilityState==='visible'&&++cabT%3===0)fetch('/api/user/me').then(function(r){return r.json()}).then(function(d){if(d.user){mo=d.orders||[];drawCab()}}).catch(function(){})},5000);
+ <script>
+    const videoElement = document.getElementById('webcam');
+
+    // Ноутбуктің веб-камерасын браузер арқылы тікелей қосу
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(function (stream) {
+                videoElement.srcObject = stream;
+            })
+            .catch(function (error) {
+                console.error("Камераны қосу мүмкін болмады немесе рұқсат берілмеді:", error);
+                alert("Веб-камераға қол жеткізуге рұқсат беріңіз!");
+            });
+    } else {
+        alert("Сіздің браузериңіз веб-камераны қолдамайды.");
+    }
+</script>
