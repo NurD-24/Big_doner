@@ -534,5 +534,37 @@
   "/img/review5.jpg",
   "/img/review6.jpg"
  ],
- "requireLogin": false
+ "requireLogin": false,
+ "instagram": "https://www.instagram.com/big_doner_aktau/",
+ "promoTitle": "Жеткізу тегін",
+ "promoText": "",
+ "payments": [
+  {
+   "id": "cash",
+   "name": "Қолма-қол ақша",
+   "note": "Курьерге немесе кассада төлейсіз",
+   "on": true
+  },
+  {
+   "id": "pos",
+   "name": "Банк картасы (терминал)",
+   "note": "Курьерде терминал бар",
+   "on": true
+  },
+  {
+   "id": "kaspi",
+   "name": "Kaspi аударым / QR",
+   "note": "Алдын ала Kaspi арқылы төлейсіз",
+   "on": true
+  }
+ ],
+ "kaspiPhone": "",
+ "kaspiLink": "",
+ "kaspiQr": "",
+ "camera": {
+  "on": true,
+  "title": "Ас үйдегі тікелей эфир",
+  "url": "http://192.168.8.63:8080/video",
+  "kind": "auto"
+ }
 }

@@ -37,7 +37,7 @@ textarea{min-height:90px;resize:vertical}label{display:block;font-size:13px;colo
 <button class="b p" id="save">Сайтқа сақтау</button><a class="b" href="/" target="_blank" style="text-decoration:none;color:inherit">Сайт ↗</a><button class="b" id="out">Шығу</button></div></div>
 <div id="v"></div></div>
 <script>
-var S,O=[],tab='o',dirty=false,all=false,sound=true,$=function(i){return document.getElementById(i)};
+var SMSS={provider:'',today:0,limit:0},S,O=[],tab='o',dirty=false,all=false,sound=true,$=function(i){return document.getElementById(i)};
 var ST={new:'Жаңа',accepted:'Қабылданды',cooking:'Дайындалуда',delivering:'Жолда',done:'Дайын',cancelled:'Бас тарту'};
 function esc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
 function fm(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' ₸'}
@@ -46,7 +46,7 @@ function toast(t){var e=document.createElement('div');e.className='toast';e.text
 function beep(){if(!sound)return;try{var a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.setValueAtTime(.3,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.8);o.start();o.stop(a.currentTime+.8)}catch(e){}}
 function showLogin(){$('app').classList.add('hide');$('login').classList.remove('hide');$('pw').focus()}
 function start(){$('login').classList.add('hide');$('app').classList.remove('hide');
-  Promise.all([api('/api/site'),api('/api/orders')]).then(function(r){S=r[0];O=r[1];draw();live()})}
+  Promise.all([api('/api/site'),api('/api/orders'),api('/api/sms/status').catch(function(){return{provider:'',today:0,limit:0}})]).then(function(r){S=r[0];O=r[1];SMSS=r[2];defPay();draw();live()})}
 $('go').onclick=function(){api('/api/login','POST',{password:$('pw').value}).then(start).catch(function(e){$('msg').textContent=e.message})};
 $('pw').onkeydown=function(e){if(e.key==='Enter')$('go').click()};
 $('out').onclick=function(){api('/api/logout','POST').then(function(){location.reload()})};
@@ -57,24 +57,39 @@ $('save').onclick=function(){api('/api/site','PUT',S).then(function(){setDirty(f
 document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){tab=b.dataset.t;if(tab==='u')loadU();else draw()}});
 function live(){var es=new EventSource('/events');
   es.addEventListener('order',function(e){O.unshift(JSON.parse(e.data));beep();if(tab==='o')draw();else badge()});
-  es.addEventListener('order-status',function(e){var d=JSON.parse(e.data);O.forEach(function(o){if(o.id===d.id)o.status=d.status});if(tab==='o')draw();else badge()});
+  es.addEventListener('order-status',function(e){var d=JSON.parse(e.data);O.forEach(function(o){if(o.id===d.id){if(d.status)o.status=d.status;if(d.payStatus)o.payStatus=d.payStatus}});if(tab==='o')draw();else badge()});
+  es.addEventListener('order-pay',function(e){var d=JSON.parse(e.data);O.forEach(function(o){if(o.id===d.id)o.payStatus=d.payStatus});beep();if(tab==='o')draw()});
   es.addEventListener('user',function(){if(tab==='u')loadU()});
   es.addEventListener('order-del',function(e){var d=JSON.parse(e.data);O=O.filter(function(o){return o.id!==d.id});if(tab==='o')draw()})}
+var DEFPAY=[{id:'cash',name:'Қолма-қол ақша',note:'Курьерге немесе кассада төлейсіз',on:true},{id:'pos',name:'Банк картасы (терминал)',note:'Курьерде терминал бар',on:true},{id:'kaspi',name:'Kaspi аударым / QR',note:'Алдын ала Kaspi арқылы төлейсіз',on:true}];
+function defPay(){if(!S.camera)S.camera={on:false,title:'Ас үйдегі тікелей эфир',url:'',kind:'auto'};if(!S.payments||!S.payments.length)S.payments=JSON.parse(JSON.stringify(DEFPAY));['kaspiPhone','kaspiLink','kaspiQr'].forEach(function(k){if(S[k]==null)S[k]=''})}
+function payCard(){var h='<h2>Төлем әдістері</h2><div class="card">';
+  S.payments.forEach(function(p,i){var q='payments.'+i;h+='<div class="row" style="margin-bottom:8px"><label style="margin:0;color:var(--tx);min-width:150px"><input type="checkbox" style="width:auto" data-t="b" data-p="'+q+'.on"'+(p.on!==false?' checked':'')+'> <b>'+esc(p.id==='cash'?'Қолма-қол':p.id==='pos'?'Терминал':'Kaspi')+'</b></label><input style="flex:1;min-width:180px" data-p="'+q+'.name" value="'+esc(p.name)+'" aria-label="Аты"><input style="flex:2;min-width:220px" data-p="'+q+'.note" value="'+esc(p.note||'')+'" aria-label="Түсіндірме"></div>'});
+  h+='<h3>Kaspi деректері</h3><p class="mut">Kaspi төлемі тек телефон нөмірі немесе сілтеме толтырылғанда сайтта көрінеді. Төлемді өзіңіз Kaspi қосымшасында тексеріп, "Төлем расталды" батырмасын басасыз.</p><div class="g2"><div><label>Kaspi телефон нөмірі (77XXXXXXXXX)</label><input data-p="kaspiPhone" value="'+esc(S.kaspiPhone)+'"></div><div><label>Kaspi Pay / төлем сілтемесі (міндетті емес)</label><input data-p="kaspiLink" value="'+esc(S.kaspiLink)+'" placeholder="https://..."></div></div>'+
+  '<label>Kaspi QR суреті (міндетті емес)</label><div class="row">'+(S.kaspiQr?'<img class="im" src="'+esc(S.kaspiQr)+'" alt="" style="background:#fff">':'')+'<label class="b" style="margin:0;color:var(--tx)">QR жүктеу<input type="file" accept="image/*" class="hide" data-upq="1"></label>'+(S.kaspiQr?'<button class="b d" data-a="qrdel">Жою</button>':'')+'</div></div>';return h}
+function camCard(){var c=S.camera;return '<h2>Тікелей камера (тек тіркелген клиенттерге)</h2><div class="card"><label style="margin:0;color:var(--tx)"><input type="checkbox" style="width:auto" data-t="b" data-p="camera.on"'+(c.on?' checked':'')+'> Камераны қосу</label>'+
+  '<div class="g2"><div><label>Тақырыбы</label><input data-p="camera.title" value="'+esc(c.title)+'"></div><div><label>Ағын түрі</label><select data-p="camera.kind"><option value="auto"'+(c.kind==='auto'?' selected':'')+'>Автоматты</option><option value="iframe"'+(c.kind==='iframe'?' selected':'')+'>Бет/плеер (iframe, YouTube Live)</option><option value="hls"'+(c.kind==='hls'?' selected':'')+'>HLS (.m3u8)</option><option value="mjpeg"'+(c.kind==='mjpeg'?' selected':'')+'>MJPEG (сурет ағыны)</option></select></div></div>'+
+  '<label>Ағын сілтемесі (https://...)</label><input data-p="camera.url" value="'+esc(c.url)+'" placeholder="https://.../live.m3u8"><p class="mut" style="margin-top:8px">Камера сілтемесі тек тіркелген клиенттерге жіберіледі, тіркелмегендерге бұл бөлім мүлде көрінбейді. Браузер RTSP (rtsp://) ағынын көрсете алмайды: оны HLS-ке айналдыру немесе YouTube Live/камера бұлтын қолдану керек.</p></div>'}
+function smsCard(){return '<h2>SMS растау</h2><div class="card">'+(SMSS.provider?'<p><b style="color:var(--ok)">Қосулы</b> ('+esc(SMSS.provider)+') · бүгін жіберілген SMS: <b>'+SMSS.today+' / '+SMSS.limit+'</b></p>':'<p><b style="color:var(--ac2)">Өшірулі</b>: тіркелу әзірге SMS-растаусыз жұмыс істейді.</p>')+'<p class="mut" style="margin-top:8px">SMS қызметі серверде орта айнымалылары арқылы қосылады (құпия кілттер осы жерде сақталмайды): SMS_PROVIDER=mobizon және MOBIZON_KEY, немесе SMS_PROVIDER=smsc және SMSC_LOGIN, SMSC_PASSWORD. Сынақ үшін SMS_PROVIDER=console (код сервер терезесінде шығады). Күндік лимит: SMS_DAILY_LIMIT.</p></div>'}
 function badge(){var n=O.filter(function(o){return o.status==='new'}).length;$('nb').textContent=n;$('nb').classList.toggle('hide',!n);document.title=(n?'('+n+') ':'')+'Big Doner — Админ'}
 function draw(){document.querySelectorAll('.tab').forEach(function(b){b.setAttribute('aria-selected',b.dataset.t===tab)});badge();
   $('v').innerHTML=tab==='o'?vO():tab==='c'?vC():tab==='m'?vM():tab==='u'?vU():vS()}
 setInterval(function(){if(!S)return;api('/api/orders').then(function(l){
   var known={};O.forEach(function(o){known[o.id]=1});var fresh=l.some(function(o){return !known[o.id]});
   if(fresh)beep();if(JSON.stringify(l)!==JSON.stringify(O)){O=l;if(tab==='o')draw();else badge()}}).catch(function(){})},5000);
+var PSL={cod:'Алғанда төленеді',pending:'Төлем күтілуде',claimed:'Клиент төледім деді',paid:'Төленді'};
+function payPill(o){var s=o.payStatus||'cod',bg=s==='paid'?'var(--ok)':s==='claimed'?'var(--ac2)':s==='pending'?'#7a5a1a':'var(--bg)';
+  return '<span class="pill" style="background:'+bg+';color:#fff;border:1px solid var(--ln)">'+esc(o.payName||'Төлем')+' · '+PSL[s]+'</span>'}
+function payBtn(o){var s=o.payStatus||'cod';return s==='paid'?'<button class="b" data-a="pay" data-id="'+o.id+'" data-s="'+(o.pay==='kaspi'?'pending':'cod')+'">Төлемді болдырмау</button>':'<button class="b p" data-a="pay" data-id="'+o.id+'" data-s="paid">Төлем расталды</button>'}
 // ---- Тапсырыстар
 function vO(){var L=O.filter(function(o){return all||(o.status!=='done'&&o.status!=='cancelled')});
   var h='<div class="row" style="margin-bottom:12px"><button class="b" data-a="all">'+(all?'Тек белсенділер':'Барлығын көрсету')+'</button><button class="b" data-a="snd">Дыбыс: '+(sound?'қосулы':'өшірулі')+'</button><span class="mut">Барлығы: '+O.length+'</span></div>';
   if(!L.length)h+='<p class="mut">Белсенді тапсырыс жоқ. Жаңасы келсе осы жерде бірден шығады.</p>';
   L.forEach(function(o){var d=new Date(o.time);
-    h+='<div class="card'+(o.status==='new'?' new':'')+'"><div class="row"><b>№'+o.num+'</b><span class="pill '+o.status+'">'+ST[o.status]+'</span><span class="mut">'+d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span><span class="sp"></span><b style="color:var(--ac);font-size:18px">'+fm(o.total)+'</b></div>'+
+    h+='<div class="card'+(o.status==='new'?' new':'')+'"><div class="row"><b>№'+o.num+'</b><span class="pill '+o.status+'">'+ST[o.status]+'</span>'+payPill(o)+'<span class="mut">'+d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span><span class="sp"></span><b style="color:var(--ac);font-size:18px">'+fm(o.total)+'</b></div>'+
     '<p style="margin:8px 0"><b>'+esc(o.name||'Аты жоқ')+'</b> · <a style="color:var(--ac)" href="tel:'+esc(o.phone)+'">'+esc(o.phone)+'</a><br>'+(o.uid?'<span class="pill" style="background:var(--ok);color:#fff">тіркелген</span> ':'')+(o.mode==='d'?'Жеткізу: '+esc(o.addr):'Өзі барып алады')+' · <span class="mut">'+esc(o.branch)+'</span></p>'+
     o.items.map(function(i){return'<div class="ln"><span>'+esc(i.n)+' × '+i.q+'</span><span>'+fm(i.p*i.q)+'</span></div>'}).join('')+
-    '<div class="row" style="margin-top:10px">'+Object.keys(ST).filter(function(s){return s!==o.status}).map(function(s){return'<button class="b'+(s==='cancelled'?' d':'')+'" data-a="st" data-id="'+o.id+'" data-s="'+s+'">'+ST[s]+'</button>'}).join('')+'<span class="sp"></span><button class="b d" data-a="rm" data-id="'+o.id+'">Жою</button></div></div>'});
+    '<div class="row" style="margin-top:10px">'+payBtn(o)+Object.keys(ST).filter(function(s){return s!==o.status}).map(function(s){return'<button class="b'+(s==='cancelled'?' d':'')+'" data-a="st" data-id="'+o.id+'" data-s="'+s+'">'+ST[s]+'</button>'}).join('')+'<span class="sp"></span><button class="b d" data-a="rm" data-id="'+o.id+'">Жою</button></div></div>'});
   return h}
 // ---- Клиенттер (база)
 var U=[],uloaded=false;
@@ -85,7 +100,7 @@ function vU(){var day=Date.now()-864e5,nw=U.filter(function(u){return u.created>
   if(!uloaded)return h+'<p class="mut">Жүктелуде...</p>';
   if(!U.length)return h+'<p class="mut">Әзірге тіркелген клиент жоқ. Клиенттер сайтта "Кіру → Тіркелу" арқылы тіркеледі.</p>';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px"><tr class="mut" style="text-align:left"><th>№</th><th>Аты</th><th>Телефон</th><th>Тіркелген</th><th>Соңғы кіру</th><th>Тапсырыс</th><th>Жиыны</th><th></th></tr>';
-  U.forEach(function(u,i){h+='<tr data-q="'+esc((u.name+' '+u.phone).toLowerCase())+'" style="border-top:1px solid var(--ln)"><td class="mut">'+(U.length-i)+'</td><td><b>'+esc(u.name)+'</b></td><td><a style="color:var(--ac)" href="tel:+'+esc(u.phone)+'">+'+esc(u.phone)+'</a></td><td>'+fd(u.created)+'</td><td>'+fd(u.last)+'</td><td>'+u.orders+'</td><td>'+fm(u.total)+'</td><td style="white-space:nowrap"><button class="b" data-a="upw" data-id="'+u.id+'">Құпиясөз</button> <button class="b d" data-a="udel" data-id="'+u.id+'">Жою</button></td></tr>'});
+  U.forEach(function(u,i){h+='<tr data-q="'+esc((u.name+' '+u.phone).toLowerCase())+'" style="border-top:1px solid var(--ln)"><td class="mut">'+(U.length-i)+'</td><td><b>'+esc(u.name)+'</b></td><td><a style="color:var(--ac)" href="tel:+'+esc(u.phone)+'">+'+esc(u.phone)+'</a>'+(u.ver?' <span title="SMS-пен расталған" style="color:var(--ok)">✓</span>':'')+'</td><td>'+fd(u.created)+'</td><td>'+fd(u.last)+'</td><td>'+u.orders+'</td><td>'+fm(u.total)+'</td><td style="white-space:nowrap"><button class="b" data-a="upw" data-id="'+u.id+'">Құпиясөз</button> <button class="b d" data-a="udel" data-id="'+u.id+'">Жою</button></td></tr>'});
   return h+'</table></div>'}
 document.addEventListener('input',function(e){if(e.target.id!=='uq')return;var q=e.target.value.toLowerCase().trim();document.querySelectorAll('tr[data-q]').forEach(function(r){r.classList.toggle('hide',q&&r.dataset.q.indexOf(q)<0)})});
 function csv(){var q=function(v){return '"'+String(v).replace(/"/g,'""')+'"'},r=[['Аты','Телефон','Тіркелген','Соңғы кіру','Тапсырыс саны','Жиыны (тг)'].map(q).join(',')];
@@ -112,7 +127,7 @@ function vM(){var h='<button class="b p" data-a="add" data-p="menu">+ Бөлім
   return h}
 // ---- Баптаулар
 function vS(){var h='<div class="card"><div class="g2"><div><label>Логотип мәтіні (● белгісі түсті болады)</label><input data-p="brand" value="'+esc(S.brand)+'"></div><div><label>Жұмыс уақыты</label><input data-p="hours" value="'+esc(S.hours)+'"></div><div><label>Тегін жеткізу (₸-ден)</label><input type="number" data-t="n" data-p="freeFrom" value="'+S.freeFrom+'"></div></div>'+
-  '<label>Басты тақырып (&lt;span&gt; — түсті сөз)</label><input data-p="heroTitle" value="'+esc(S.heroTitle)+'"><label>Басты мәтін</label><textarea data-p="heroText">'+esc(S.heroText)+'</textarea><label style="margin-top:12px;color:var(--tx)"><input type="checkbox" style="width:auto" data-t="b" data-p="requireLogin"'+(S.requireLogin?' checked':'')+'> Тапсырыс беру үшін тіркелу міндетті</label></div><h2>Филиалдар</h2>';
+  '<label>Басты тақырып (&lt;span&gt; — түсті сөз)</label><input data-p="heroTitle" value="'+esc(S.heroTitle)+'"><label>Басты мәтін</label><textarea data-p="heroText">'+esc(S.heroText)+'</textarea><div class="g2"><div><label>Акция тақырыбы</label><input data-p="promoTitle" value="'+esc(S.promoTitle||'')+'"></div><div><label>Instagram сілтемесі</label><input data-p="instagram" value="'+esc(S.instagram||'')+'"></div></div><label>Акция мәтіні (бос болса стандартты мәтін)</label><textarea data-p="promoText" style="min-height:60px">'+esc(S.promoText||'')+'</textarea><label style="margin-top:12px;color:var(--tx)"><input type="checkbox" style="width:auto" data-t="b" data-p="requireLogin"'+(S.requireLogin?' checked':'')+'> Тапсырыс беру үшін тіркелу міндетті</label></div>'+payCard()+camCard()+smsCard()+'<h2>Филиалдар</h2>';
   S.branches.forEach(function(b,i){var p='branches.'+i;h+='<div class="card"><div class="g2"><div><label>Аты</label><input data-p="'+p+'.name" value="'+esc(b.name)+'"></div><div><label>Мекенжай</label><input data-p="'+p+'.addr" value="'+esc(b.addr)+'"></div><div><label>Телефон (77750804050 түрінде)</label><input data-p="'+p+'.phone" value="'+esc(b.phone)+'"></div></div>'+(S.branches.length>1?'<button class="b d" style="margin-top:8px" data-a="del" data-p="branches" data-i="'+i+'">Жою</button>':'')+'</div>'});
   return h+'<button class="b" data-a="add" data-p="branches">+ Филиал қосу</button>'}
 // ---- Жалпы өңдеу
@@ -121,7 +136,9 @@ function setv(path,v){var k=path.split('.'),o=S;for(var i=0;i<k.length-1;i++)o=o
 document.addEventListener('input',function(e){var t=e.target;if(!t.dataset||!t.dataset.p)return;var v=t.value;
   if(t.dataset.t==='n')v=+v||0;else if(t.dataset.t==='b')v=t.checked;else if(t.dataset.t==='l')v=v.split('\n').map(function(x){return x.trim()}).filter(Boolean);
   setv(t.dataset.p,v);setDirty(true)});
-document.addEventListener('change',function(e){var t=e.target;if(t.dataset&&t.dataset.up!==undefined&&t.files[0]){var f=t.files[0],ext=f.name.split('.').pop();
+document.addEventListener('change',function(e){var t=e.target;
+  if(t.dataset&&t.dataset.upq&&t.files[0]){var f=t.files[0];fetch('/api/upload?ext='+encodeURIComponent(f.name.split('.').pop()),{method:'POST',body:f}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error);return d})}).then(function(d){S.kaspiQr=d.url;setDirty(true);draw()}).catch(function(x){alert(x.message)});return}
+  if(t.dataset&&t.dataset.up!==undefined&&t.files[0]){var f=t.files[0],ext=f.name.split('.').pop();
   fetch('/api/upload?ext='+encodeURIComponent(ext),{method:'POST',body:f}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error);return d})}).then(function(d){S.combos[+t.dataset.up].img=d.url;setDirty(true);draw()}).catch(function(x){alert(x.message)})}});
 var NEW={combos:function(){return{id:'c'+Date.now().toString(36),name:'Жаңа комбо',items:['Тағам'],price:1000,free:false,img:'/img/c1.jpg',on:true}},
   menu:function(){return{title:'Жаңа бөлім',groups:[{title:'Топ',note:'',items:[]}]}},groups:function(){return{title:'Жаңа топ',note:'',items:[]}},
@@ -129,7 +146,9 @@ var NEW={combos:function(){return{id:'c'+Date.now().toString(36),name:'Жаңа 
 document.addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
   if(a==='all'){all=!all}else if(a==='snd'){sound=!sound;beep()}
   else if(a==='st'){api('/api/orders/'+b.dataset.id,'PATCH',{status:b.dataset.s}).catch(function(x){alert(x.message)});return}
+  else if(a==='pay'){api('/api/orders/'+b.dataset.id,'PATCH',{payStatus:b.dataset.s}).catch(function(x){alert(x.message)});return}
   else if(a==='rm'){if(confirm('Тапсырысты жою керек пе?'))api('/api/orders/'+b.dataset.id,'DELETE');return}
+  else if(a==='qrdel'){S.kaspiQr='';setDirty(true)}
   else if(a==='ur'){loadU();return}
   else if(a==='csv'){csv();return}
   else if(a==='upw'){var pw=prompt('Жаңа құпиясөз (кемінде 6 таңба):');if(pw)api('/api/users/'+b.dataset.id+'/password','POST',{password:pw}).then(function(){toast('Құпиясөз жаңартылды')}).catch(function(x){alert(x.message)});return}
